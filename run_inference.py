@@ -63,10 +63,9 @@ def main():
         test_files = data_dir.files('Untitled1_frame_*.{}'.format(ext))
         for file in test_files:
             img_pair = file.parent / (("_".join(file.stem.split("_")[:-1]))+"_"+str(int(file.stem.split("_")[-1])+1)+".jpg")
-            print(img_pair)
             if img_pair.isfile():
                 img_pairs.append([file, img_pair])
-                # print(img_pair.isfile())
+                print(file, img_pair)
     # return
     print('{} samples found'.format(len(img_pairs)))
     # create model
@@ -78,8 +77,8 @@ def main():
     if 'div_flow' in network_data.keys():
         args.div_flow = network_data['div_flow']
     for (img1_file, img2_file) in tqdm(img_pairs):
-        img1 = input_transform(cv2.resize(imread(img1_file), (512,384)))
-        img2 = input_transform(cv2.resize(imread(img2_file), (512,384)))
+        img1 = input_transform(imread(img1_file))
+        img2 = input_transform(imread(img2_file))
         input_var = torch.cat([img1, img2]).unsqueeze(0)
         if args.bidirectional:
             # feed inverted pair along with normal pair
@@ -91,7 +90,8 @@ def main():
         if args.upsampling is not None:
             output = F.interpolate(output, size=img1.size()[-2:], mode=args.upsampling, align_corners=False)
         for suffix, flow_output in zip(['flow', 'inv_flow'], output):
-            filename = save_path/'{}{}'.format(img1_file.stem[:-1], suffix)
+            filename = save_path/'{}{}'.format(img1_file.stem, suffix)
+            print(img1_file.stem)
             if args.output_value in['vis', 'both']:
                 rgb_flow = flow2rgb(args.div_flow * flow_output, max_value=args.max_flow)
                 to_save = (rgb_flow * 255).astype(np.uint8).transpose(1,2,0)
