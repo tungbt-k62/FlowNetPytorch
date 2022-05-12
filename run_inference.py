@@ -1,22 +1,18 @@
 import argparse
 from path import Path
-
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import models
 from tqdm import tqdm
-
 import torchvision.transforms as transforms
 import flow_transforms
 from imageio import imread, imwrite
 import numpy as np
 from util import flow2rgb
-
+import cv2
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__"))
-
-
 parser = argparse.ArgumentParser(description='PyTorch FlowNet inference on a folder of img pairs',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('data', metavar='DIR',
@@ -36,15 +32,11 @@ parser.add_argument('--max_flow', default=None, type=float,
 parser.add_argument('--upsampling', '-u', choices=['nearest', 'bilinear'], default=None, help='if not set, will output FlowNet raw input,'
                     'which is 4 times downsampled. If set, will output full resolution flow map, with selected upsampling')
 parser.add_argument('--bidirectional', action='store_true', help='if set, will output invert flow (from 1 to 0) along with regular flow')
-
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
-
 @torch.no_grad()
 def main():
     global args, save_path
     args = parser.parse_args()
-
     if args.output_value == 'both':
         output_string = "raw output and RGB visualization"
     elif args.output_value == 'raw':
@@ -66,15 +58,16 @@ def main():
         transforms.Normalize(mean=[0,0,0], std=[255,255,255]),
         transforms.Normalize(mean=[0.411,0.432,0.45], std=[1,1,1])
     ])
-
     img_pairs = []
     for ext in args.img_exts:
-        test_files = data_dir.files('*1.{}'.format(ext))
+        test_files = data_dir.files('Untitled1_frame_*.{}'.format(ext))
         for file in test_files:
-            img_pair = file.parent / (file.stem[:-1] + '2.{}'.format(ext))
+            img_pair = file.parent / (("_".join(file.stem.split("_")[:-1]))+"_"+str(int(file.stem.split("_")[-1])+1)+".jpg")
+            print(img_pair)
             if img_pair.isfile():
                 img_pairs.append([file, img_pair])
-
+                # print(img_pair.isfile())
+    # return
     print('{} samples found'.format(len(img_pairs)))
     # create model
     network_data = torch.load(args.pretrained)
@@ -82,21 +75,16 @@ def main():
     model = models.__dict__[network_data['arch']](network_data).to(device)
     model.eval()
     cudnn.benchmark = True
-
     if 'div_flow' in network_data.keys():
         args.div_flow = network_data['div_flow']
-
     for (img1_file, img2_file) in tqdm(img_pairs):
-
-        img1 = input_transform(imread(img1_file))
-        img2 = input_transform(imread(img2_file))
+        img1 = input_transform(cv2.resize(imread(img1_file), (512,384)))
+        img2 = input_transform(cv2.resize(imread(img2_file), (512,384)))
         input_var = torch.cat([img1, img2]).unsqueeze(0)
-
         if args.bidirectional:
             # feed inverted pair along with normal pair
             inverted_input_var = torch.cat([img2, img1]).unsqueeze(0)
             input_var = torch.cat([input_var, inverted_input_var])
-
         input_var = input_var.to(device)
         # compute output
         output = model(input_var)
@@ -112,7 +100,5 @@ def main():
                 # Make the flow map a HxWx2 array as in .flo files
                 to_save = (args.div_flow*flow_output).cpu().numpy().transpose(1,2,0)
                 np.save(filename + '.npy', to_save)
-
-
 if __name__ == '__main__':
     main()
