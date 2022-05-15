@@ -78,8 +78,8 @@ def main():
     if 'div_flow' in network_data.keys():
         args.div_flow = network_data['div_flow']
     for (img1_file, img2_file) in tqdm(img_pairs):
-        img1 = input_transform(cv2.resize(imread(img1_file), (384,512)))
-        img2 = input_transform(cv2.resize(imread(img2_file), (384,512)))
+        img1 = input_transform(imread(img1_file))
+        img2 = input_transform(imread(img2_file))
         input_var = torch.cat([img1, img2]).unsqueeze(0)
         if args.bidirectional:
             # feed inverted pair along with normal pair
